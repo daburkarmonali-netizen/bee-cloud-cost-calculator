@@ -1,0 +1,607 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cloud Storage Cost Calculator — Subscription vs. Own Your Storage</title>
+<meta name="description" content="Interactive calculator comparing the lifetime cost of cloud storage subscriptions against a one-time personal storage device. Shows total spend, savings, payback period and the break-even point.">
+<meta name="author" content="Shubham Kumbhalkar">
+
+<!-- Open Graph / social preview -->
+<meta property="og:title" content="Cloud Storage Cost Calculator">
+<meta property="og:description" content="How much is your cloud subscription really costing you? Move the sliders.">
+<meta property="og:type" content="website">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+<style>
+/* ============================================================
+   Design tokens — matched to shubhamkumbhalkar.github.io
+   ============================================================ */
+:root{
+  --bg-primary:#0a0a0f;
+  --bg-secondary:#12121a;
+  --bg-card:#1a1a2e;
+  --bg-card-hover:#22223a;
+  --text-primary:#e4e4e7;
+  --text-secondary:#a1a1aa;
+  --accent:#6366f1;
+  --accent-glow:rgba(99,102,241,.3);
+  --accent-secondary:#818cf8;
+  --border:#27272a;
+  --radius:12px;
+  --transition:.3s cubic-bezier(.4,0,.2,1);
+
+  /* calculator semantics */
+  --sub:#f472b6;        /* subscription (the cost that never stops) */
+  --own:#34d399;        /* ownership (one time)                     */
+  --warn:#fbbf24;
+  --mono:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  background:var(--bg-primary);
+  color:var(--text-primary);
+  font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  line-height:1.6;
+  -webkit-font-smoothing:antialiased;
+  min-height:100vh;
+}
+/* ambient glow, same trick as the portfolio hero */
+body::before{
+  content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
+  background:
+    radial-gradient(700px circle at 12% 0%,rgba(99,102,241,.10),transparent 55%),
+    radial-gradient(600px circle at 92% 8%,rgba(129,140,248,.07),transparent 55%);
+}
+.wrap{position:relative;z-index:1;max-width:1180px;margin:0 auto;padding:56px 24px 72px}
+
+/* ---------------------------------------------------------- header */
+header{margin-bottom:36px}
+.eyebrow{
+  display:inline-flex;align-items:center;gap:8px;
+  font-size:.72rem;font-weight:600;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--accent-secondary);
+  background:rgba(99,102,241,.09);
+  border:1px solid rgba(99,102,241,.28);
+  border-radius:999px;padding:6px 14px;margin-bottom:18px;
+}
+.eyebrow::before{content:'';width:6px;height:6px;border-radius:50%;background:var(--accent);
+  box-shadow:0 0 0 4px var(--accent-glow)}
+h1{font-size:clamp(1.9rem,4.4vw,2.9rem);font-weight:800;letter-spacing:-.02em;line-height:1.12}
+h1 em{font-style:normal;background:linear-gradient(135deg,var(--accent),var(--accent-secondary));
+  -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+.lede{color:var(--text-secondary);font-size:1.02rem;max-width:62ch;margin-top:14px}
+
+/* ---------------------------------------------------------- layout */
+.grid{display:grid;grid-template-columns:minmax(0,.95fr) minmax(0,1.05fr);gap:20px;align-items:start}
+@media(max-width:900px){.grid{grid-template-columns:1fr}}
+
+.card{
+  background:var(--bg-card);border:1px solid var(--border);
+  border-radius:var(--radius);padding:24px;transition:var(--transition);
+}
+.card:hover{border-color:rgba(99,102,241,.35)}
+.card h2{font-size:.78rem;font-weight:700;letter-spacing:.13em;text-transform:uppercase;
+  color:var(--text-secondary);margin-bottom:4px}
+.card .note{font-size:.82rem;color:var(--text-secondary);margin-bottom:20px}
+
+/* ---------------------------------------------------------- presets */
+.presets{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:22px}
+.preset{
+  font:inherit;font-size:.78rem;cursor:pointer;
+  background:var(--bg-secondary);color:var(--text-secondary);
+  border:1px solid var(--border);border-radius:999px;padding:6px 13px;
+  transition:var(--transition);
+}
+.preset:hover{color:var(--text-primary);border-color:var(--accent);transform:translateY(-1px)}
+.preset:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+/* ---------------------------------------------------------- sliders */
+.field{margin-bottom:22px}
+.field-top{display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin-bottom:9px}
+.field-top label{font-size:.9rem;font-weight:500}
+.field-top .val{font-family:var(--mono);font-size:1.02rem;font-weight:500;color:var(--accent-secondary)}
+.field-hint{font-size:.75rem;color:var(--text-secondary);margin-top:7px}
+
+input[type=range]{
+  -webkit-appearance:none;appearance:none;width:100%;height:6px;border-radius:99px;
+  background:linear-gradient(90deg,var(--accent) var(--pct,50%),#2a2a3d var(--pct,50%));
+  cursor:pointer;outline:none;
+}
+input[type=range]::-webkit-slider-thumb{
+  -webkit-appearance:none;width:20px;height:20px;border-radius:50%;
+  background:#fff;border:3px solid var(--accent);cursor:grab;
+  box-shadow:0 2px 10px var(--accent-glow);transition:transform .15s ease;
+}
+input[type=range]::-webkit-slider-thumb:active{transform:scale(1.16);cursor:grabbing}
+input[type=range]::-moz-range-thumb{
+  width:16px;height:16px;border-radius:50%;background:#fff;border:3px solid var(--accent);
+  box-shadow:0 2px 10px var(--accent-glow);cursor:grab;
+}
+input[type=range]:focus-visible{box-shadow:0 0 0 3px var(--accent-glow)}
+
+/* ---------------------------------------------------------- segmented */
+.seg{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+.seg button{
+  font:inherit;font-size:.8rem;cursor:pointer;padding:11px 8px;
+  background:var(--bg-secondary);color:var(--text-secondary);
+  border:1px solid var(--border);border-radius:9px;transition:var(--transition);
+  display:flex;flex-direction:column;gap:2px;align-items:center;
+}
+.seg button b{font-family:var(--mono);font-size:.86rem;color:var(--text-primary)}
+.seg button:hover{border-color:var(--accent-secondary)}
+.seg button[aria-pressed=true]{
+  border-color:var(--accent);background:rgba(99,102,241,.12);color:var(--accent-secondary);
+}
+.seg button[aria-pressed=true] b{color:var(--accent-secondary)}
+.custom-price{
+  margin-top:10px;display:none;align-items:center;gap:9px;
+}
+.custom-price.on{display:flex}
+.custom-price input{
+  font:inherit;font-family:var(--mono);width:120px;padding:8px 11px;
+  background:var(--bg-secondary);color:var(--text-primary);
+  border:1px solid var(--border);border-radius:8px;
+}
+.custom-price input:focus{outline:none;border-color:var(--accent)}
+.custom-price span{font-size:.78rem;color:var(--text-secondary)}
+
+/* ---------------------------------------------------------- headline */
+.headline{
+  border:1px solid rgba(52,211,153,.3);
+  background:linear-gradient(135deg,rgba(52,211,153,.10),rgba(99,102,241,.06));
+  border-radius:var(--radius);padding:20px 22px;margin-bottom:20px;
+}
+.headline .cap{font-size:.72rem;font-weight:600;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--text-secondary)}
+.headline .amount{
+  font-family:var(--mono);font-size:clamp(2.1rem,6vw,3.1rem);font-weight:500;
+  line-height:1.05;color:var(--own);letter-spacing:-.02em;margin:4px 0 2px;
+  display:block;
+}
+.headline .amount.neg{color:var(--warn)}
+.headline .because{font-size:.88rem;color:var(--text-secondary)}
+.headline .because b{color:var(--text-primary);font-weight:600}
+
+/* ---------------------------------------------------------- metrics */
+.metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(128px,1fr));gap:10px;margin-bottom:22px}
+.metric{background:var(--bg-secondary);border:1px solid var(--border);border-radius:10px;padding:13px 14px}
+.metric .k{font-size:.7rem;letter-spacing:.08em;text-transform:uppercase;color:var(--text-secondary)}
+.metric .v{font-family:var(--mono);font-size:1.16rem;font-weight:500;margin-top:5px}
+.metric.sub .v{color:var(--sub)}
+.metric.own .v{color:var(--own)}
+.metric.pay .v{color:var(--accent-secondary)}
+
+/* ---------------------------------------------------------- chart */
+.chart-head{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;
+  margin-bottom:10px}
+.chart-head h3{font-size:.78rem;font-weight:700;letter-spacing:.13em;text-transform:uppercase;
+  color:var(--text-secondary)}
+.legend{display:flex;gap:14px;font-size:.76rem;color:var(--text-secondary)}
+.legend i{display:inline-block;width:11px;height:3px;border-radius:2px;margin-right:6px;
+  vertical-align:middle}
+svg{width:100%;height:auto;display:block;overflow:visible}
+.gl{stroke:#27272a;stroke-width:1}
+.ax{fill:#71717a;font-size:11px;font-family:'JetBrains Mono',monospace}
+.ln{fill:none;stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round}
+.ar{fill-opacity:.10}
+.xhair{stroke:var(--accent);stroke-width:1;stroke-dasharray:4 4;opacity:.85}
+.bepill{fill:var(--bg-card);stroke:var(--accent)}
+.betxt{fill:var(--accent-secondary);font-size:11px;font-weight:600;
+  font-family:'JetBrains Mono',monospace}
+
+/* ---------------------------------------------------------- actions */
+.actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:20px}
+.btn{
+  font:inherit;font-size:.85rem;font-weight:500;cursor:pointer;
+  padding:10px 17px;border-radius:9px;border:1px solid var(--border);
+  background:var(--bg-secondary);color:var(--text-primary);transition:var(--transition);
+  display:inline-flex;align-items:center;gap:8px;text-decoration:none;
+}
+.btn:hover{border-color:var(--accent);transform:translateY(-2px);box-shadow:0 4px 20px var(--accent-glow)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.primary:hover{background:var(--accent-secondary);border-color:var(--accent-secondary)}
+.btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+/* ---------------------------------------------------------- method */
+details{margin-top:20px;background:var(--bg-card);border:1px solid var(--border);
+  border-radius:var(--radius);overflow:hidden}
+summary{cursor:pointer;padding:16px 22px;font-size:.88rem;font-weight:600;list-style:none;
+  display:flex;justify-content:space-between;align-items:center;transition:var(--transition)}
+summary::-webkit-details-marker{display:none}
+summary:hover{background:var(--bg-card-hover)}
+summary::after{content:'+';font-family:var(--mono);font-size:1.15rem;color:var(--accent)}
+details[open] summary::after{content:'−'}
+.method{padding:0 22px 20px;font-size:.87rem;color:var(--text-secondary)}
+.method h4{color:var(--text-primary);font-size:.85rem;margin:16px 0 7px}
+.method code{font-family:var(--mono);font-size:.82rem;color:var(--accent-secondary);
+  background:var(--bg-secondary);padding:2px 7px;border-radius:5px}
+.method ul{margin:8px 0 0 20px}
+.method li{margin-bottom:6px}
+.method .caveat{border-left:2px solid var(--warn);padding-left:13px;margin-top:16px;
+  color:#fcd34d;font-size:.84rem}
+
+footer{margin-top:44px;padding-top:22px;border-top:1px solid var(--border);
+  display:flex;justify-content:space-between;flex-wrap:wrap;gap:12px;
+  font-size:.83rem;color:var(--text-secondary)}
+footer a{color:var(--accent-secondary);text-decoration:none}
+footer a:hover{text-decoration:underline}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+@media(prefers-reduced-motion:reduce){
+  *{transition:none!important;animation:none!important}html{scroll-behavior:auto}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="eyebrow">Interactive · no backend · runs entirely in your browser</div>
+  <h1>Your cloud subscription is a <em>rental</em>.<br>Here's what owning costs instead.</h1>
+  <p class="lede">Cloud storage bills never stop. A device is paid once. Move the sliders to see
+     the crossover point for your own household — total spend, savings, payback period, and the
+     month ownership pulls ahead.</p>
+</header>
+
+<div class="grid">
+
+  <!-- ================================================= CONTROLS -->
+  <section class="card" aria-labelledby="ct">
+    <h2 id="ct">Your situation</h2>
+    <p class="note">Start from a preset, then adjust.</p>
+
+    <div class="presets" role="group" aria-label="Common subscription presets">
+      <button class="preset" data-spend="10">iCloud+ 2TB · $9.99</button>
+      <button class="preset" data-spend="10">Google One 2TB · $9.99</button>
+      <button class="preset" data-spend="12">Dropbox Plus · $11.99</button>
+      <button class="preset" data-spend="23">Two services · ~$23</button>
+      <button class="preset" data-spend="35">Family, stacked · ~$35</button>
+    </div>
+
+    <div class="field">
+      <div class="field-top">
+        <label for="spend">Household cloud spend</label>
+        <output class="val" id="vSpend" for="spend"></output>
+      </div>
+      <input type="range" id="spend" min="2" max="60" step="1" value="15"
+             aria-describedby="hSpend">
+      <p class="field-hint" id="hSpend">Every recurring storage bill added together —
+         photos, backups, file sync, extra seats.</p>
+    </div>
+
+    <div class="field">
+      <div class="field-top">
+        <label for="ppl">People sharing it</label>
+        <output class="val" id="vPpl" for="ppl"></output>
+      </div>
+      <input type="range" id="ppl" min="1" max="8" step="1" value="4" aria-describedby="hPpl">
+      <p class="field-hint" id="hPpl">Cloud plans charge per seat or per plan; one device
+         serves the whole household.</p>
+    </div>
+
+    <div class="field">
+      <div class="field-top">
+        <label for="yrs">Time horizon</label>
+        <output class="val" id="vYrs" for="yrs"></output>
+      </div>
+      <input type="range" id="yrs" min="1" max="10" step="1" value="5" aria-describedby="hYrs">
+      <p class="field-hint" id="hYrs">How long you expect to keep these files. Photos usually
+         outlive the hardware.</p>
+    </div>
+
+    <div class="field" style="margin-bottom:0">
+      <div class="field-top"><label id="devLbl">One-time device cost</label></div>
+      <div class="seg" role="group" aria-labelledby="devLbl">
+        <button type="button" data-price="199" aria-pressed="true">4 TB<b>$199</b></button>
+        <button type="button" data-price="329" aria-pressed="false">8 TB<b>$329</b></button>
+        <button type="button" data-price="custom" aria-pressed="false">Custom<b>set&nbsp;$</b></button>
+      </div>
+      <div class="custom-price" id="cpWrap">
+        <input type="number" id="cp" min="0" max="5000" step="10" value="199"
+               aria-label="Custom device price in dollars">
+        <span>any drive, NAS or device</span>
+      </div>
+      <p class="field-hint">Electricity is included in the comparison — see the method below.</p>
+    </div>
+  </section>
+
+  <!-- ================================================= RESULTS -->
+  <section class="card" aria-labelledby="rt">
+    <h2 id="rt">The verdict</h2>
+    <p class="note">Updates live. Nothing leaves your browser.</p>
+
+    <div class="headline" aria-live="polite">
+      <span class="cap" id="hCap">You save</span>
+      <span class="amount" id="hAmt">$0</span>
+      <span class="because" id="hBecause"></span>
+    </div>
+
+    <div class="metrics">
+      <div class="metric sub"><div class="k">Subscription</div><div class="v" id="mSub">$0</div></div>
+      <div class="metric own"><div class="k">Own it</div><div class="v" id="mOwn">$0</div></div>
+      <div class="metric pay"><div class="k">Pays back in</div><div class="v" id="mPay">—</div></div>
+      <div class="metric"><div class="k">Per person</div><div class="v" id="mPer">$0</div></div>
+    </div>
+
+    <div class="chart-head">
+      <h3>Cumulative cost</h3>
+      <div class="legend">
+        <span><i style="background:var(--sub)"></i>Subscription</span>
+        <span><i style="background:var(--own)"></i>Own it</span>
+      </div>
+    </div>
+    <svg id="chart" viewBox="0 0 620 250" role="img" aria-labelledby="chartDesc"></svg>
+    <p class="sr" id="chartDesc">Line chart comparing cumulative subscription cost against a
+       one-time device purchase over the selected horizon.</p>
+
+    <div class="actions">
+      <button class="btn primary" id="share">🔗 <span id="shareTxt">Copy shareable link</span></button>
+      <button class="btn" id="reset">↺ Reset</button>
+    </div>
+  </section>
+</div>
+
+<!-- ================================================= METHOD -->
+<details>
+  <summary>How the math works — and what it deliberately ignores</summary>
+  <div class="method">
+    <p>Everything is computed client-side in plain JavaScript. No tracking, no API calls, no
+       dependencies beyond a web font.</p>
+
+    <h4>Subscription side</h4>
+    <p><code>monthly × 12 × years</code> — a straight line that never flattens. Real bills
+       usually rise; this model assumes they never do, which favours the subscription.</p>
+
+    <h4>Ownership side</h4>
+    <p><code>device price + (watts ÷ 1000 × 24 × 365 × years × $/kWh)</code></p>
+    <p>Idle draw is modelled at <b>10&nbsp;W</b> and electricity at <b>$0.17/kWh</b>
+       (roughly the US average), so about <b>$15/year</b> in power. Ignoring it would make
+       ownership look better than it is.</p>
+
+    <h4>Break-even</h4>
+    <p><code>months = price ÷ (monthly − monthly power cost)</code> — the month cumulative
+       subscription spend passes cumulative ownership cost. If your subscription costs less per
+       month than the electricity, it never breaks even, and the calculator says so.</p>
+
+    <h4>Deliberately excluded</h4>
+    <ul>
+      <li><b>Drive replacement.</b> Hardware fails; a 10-year horizon realistically includes one
+          replacement. Add it via the custom price if you want the pessimistic case.</li>
+      <li><b>Off-site copy.</b> Ownership alone is not a backup strategy — proper 3-2-1 means a
+          second copy somewhere else, which may reintroduce a small recurring cost.</li>
+      <li><b>Price inflation</b> on either side, and any resale value of the hardware.</li>
+    </ul>
+
+    <p class="caveat"><b>Read it as an order-of-magnitude tool, not a quote.</b> Subscription
+       prices are US list prices at time of writing and vary by region and promotion. The
+       interesting output isn't the exact dollar figure — it's how early the crossover happens.</p>
+  </div>
+</details>
+
+<footer>
+  <span>Built by <a href="https://shubhamkumbhalkar.github.io/">Shubham Kumbhalkar</a> ·
+        vanilla HTML/CSS/JS, single file, zero dependencies</span>
+  <span><a href="https://github.com/shubhamkumbhalkar">GitHub</a> ·
+        <a href="https://www.linkedin.com/in/shubham-kumbhalkar/">LinkedIn</a></span>
+</footer>
+</div>
+
+<script>
+'use strict';
+
+/* ===========================================================================
+   Cloud Storage Cost Calculator
+   Subscription (recurring, unbounded) vs. ownership (one-time + electricity).
+   All state lives in the URL so any result is shareable.
+   =========================================================================== */
+
+const WATTS   = 10;    // typical idle draw of a small personal storage device
+const KWH     = 0.17;  // ~US average residential rate, $/kWh
+const DEFAULTS = { spend: 15, ppl: 4, yrs: 5, price: 199 };
+
+const $ = id => document.getElementById(id);
+const el = {
+  spend: $('spend'), ppl: $('ppl'), yrs: $('yrs'), cp: $('cp'), cpWrap: $('cpWrap'),
+  vSpend: $('vSpend'), vPpl: $('vPpl'), vYrs: $('vYrs'),
+  hCap: $('hCap'), hAmt: $('hAmt'), hBecause: $('hBecause'),
+  mSub: $('mSub'), mOwn: $('mOwn'), mPay: $('mPay'), mPer: $('mPer'),
+  chart: $('chart'),
+};
+
+let price = DEFAULTS.price;
+let customMode = false;
+
+/* ------------------------------------------------------------ formatting */
+const money = n => '$' + Math.round(n).toLocaleString('en-US');
+const yearlyPower = () => (WATTS / 1000) * 24 * 365 * KWH;   // ≈ $14.89 / yr
+const monthlyPower = () => yearlyPower() / 12;
+
+function paybackLabel(months) {
+  if (!isFinite(months) || months <= 0) return 'never';
+  if (months < 12) return Math.ceil(months) + ' mo';
+  const y = months / 12;
+  return (y < 10 ? y.toFixed(1) : Math.round(y)) + ' yr';
+}
+
+/* ------------------------------------------------------------ core model */
+function model() {
+  const spend = +el.spend.value, ppl = +el.ppl.value, yrs = +el.yrs.value;
+  const subTotal = spend * 12 * yrs;
+  const ownTotal = price + yearlyPower() * yrs;
+  const net      = spend - monthlyPower();            // monthly advantage of owning
+  const payback  = net > 0 ? price / net : Infinity;   // in months
+  return { spend, ppl, yrs, subTotal, ownTotal, payback,
+           savings: subTotal - ownTotal, perPerson: ownTotal / ppl };
+}
+
+/* ------------------------------------------------------------ chart */
+function drawChart(m) {
+  const W = 620, H = 250, P = { t: 14, r: 16, b: 30, l: 52 };
+  const iw = W - P.l - P.r, ih = H - P.t - P.b;
+  const months = m.yrs * 12;
+  const peak = Math.max(m.subTotal, m.ownTotal, 1);
+  const yMax = Math.ceil(peak / 100) * 100 || 100;
+
+  const X = mo => P.l + (mo / months) * iw;
+  const Y = v  => P.t + ih - (v / yMax) * ih;
+
+  const sub = mo => m.spend * mo;
+  const own = mo => price + monthlyPower() * mo;
+
+  let s = '';
+
+  /* horizontal gridlines + y labels */
+  for (let i = 0; i <= 4; i++) {
+    const v = (yMax / 4) * i, y = Y(v);
+    s += `<line class="gl" x1="${P.l}" y1="${y}" x2="${W - P.r}" y2="${y}"/>`;
+    s += `<text class="ax" x="${P.l - 9}" y="${y + 4}" text-anchor="end">${money(v)}</text>`;
+  }
+
+  /* x labels — year ticks, thinned out on long horizons */
+  const step = m.yrs <= 6 ? 1 : 2;
+  for (let yr = 0; yr <= m.yrs; yr += step) {
+    s += `<text class="ax" x="${X(yr * 12)}" y="${H - P.b + 19}" text-anchor="middle">${
+           yr === 0 ? 'now' : 'y' + yr}</text>`;
+  }
+
+  /* the two cost curves (both linear, so endpoints suffice) */
+  const line = (fn, color) => {
+    const pts = `${X(0)},${Y(fn(0))} ${X(months)},${Y(fn(months))}`;
+    return `<polygon class="ar" fill="${color}" points="${pts} ${X(months)},${Y(0)} ${X(0)},${Y(0)}"/>`
+         + `<polyline class="ln" stroke="${color}" points="${pts}"/>`;
+  };
+  s += line(sub, 'var(--sub)');
+  s += line(own, 'var(--own)');
+
+  /* endpoint dots */
+  s += `<circle cx="${X(months)}" cy="${Y(sub(months))}" r="4.5" fill="var(--sub)"/>`;
+  s += `<circle cx="${X(months)}" cy="${Y(own(months))}" r="4.5" fill="var(--own)"/>`;
+
+  /* break-even marker, only when it lands inside the visible window */
+  if (isFinite(m.payback) && m.payback <= months) {
+    const bx = X(m.payback), by = Y(sub(m.payback));
+    const label = paybackLabel(m.payback) + ' to break even';
+    const w = label.length * 6.1 + 16;
+    const lx = Math.min(Math.max(bx - w / 2, P.l), W - P.r - w);
+    s += `<line class="xhair" x1="${bx}" y1="${P.t}" x2="${bx}" y2="${H - P.b}"/>`
+       + `<circle cx="${bx}" cy="${by}" r="5" fill="var(--bg-card)" stroke="var(--accent)" stroke-width="2.5"/>`
+       + `<rect class="bepill" x="${lx}" y="${P.t - 2}" width="${w}" height="20" rx="10"/>`
+       + `<text class="betxt" x="${lx + w / 2}" y="${P.t + 12}" text-anchor="middle">${label}</text>`;
+  }
+
+  el.chart.innerHTML = s;
+}
+
+/* ------------------------------------------------------------ render */
+function render(pushUrl = true) {
+  const m = model();
+
+  /* slider fills + readouts */
+  const fill = (node) => {
+    const pct = ((node.value - node.min) / (node.max - node.min)) * 100;
+    node.style.setProperty('--pct', pct + '%');
+  };
+  [el.spend, el.ppl, el.yrs].forEach(fill);
+  el.vSpend.textContent = money(m.spend) + '/mo';
+  el.vPpl.textContent   = m.ppl + (m.ppl > 1 ? ' people' : ' person');
+  el.vYrs.textContent   = m.yrs + (m.yrs > 1 ? ' years' : ' year');
+
+  /* headline */
+  const win = m.savings >= 0;
+  el.hCap.textContent = win ? `You save, over ${m.yrs} year${m.yrs > 1 ? 's' : ''}` : 'Owning costs you extra';
+  el.hAmt.textContent = money(Math.abs(m.savings));
+  el.hAmt.classList.toggle('neg', !win);
+  el.hBecause.innerHTML = win
+    ? `Ownership pulls ahead after <b>${paybackLabel(m.payback)}</b>, then everything after that
+       is money you simply stop spending.`
+    : `At ${money(m.spend)}/mo you haven't reached the crossover yet — stretch the horizon, or
+       add the subscriptions you forgot.`;
+
+  /* metrics */
+  el.mSub.textContent = money(m.subTotal);
+  el.mOwn.textContent = money(m.ownTotal);
+  el.mPay.textContent = paybackLabel(m.payback);
+  el.mPer.textContent = money(m.perPerson);
+
+  drawChart(m);
+  if (pushUrl) syncUrl(m);
+}
+
+/* ------------------------------------------------------------ url state */
+function syncUrl(m) {
+  const q = new URLSearchParams({ spend: m.spend, ppl: m.ppl, yrs: m.yrs, price });
+  history.replaceState(null, '', location.pathname + '?' + q);
+}
+
+function loadUrl() {
+  const q = new URLSearchParams(location.search);
+  const num = (k, lo, hi, dflt) => {
+    const v = parseFloat(q.get(k));
+    return Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : dflt;
+  };
+  el.spend.value = num('spend', 2, 60, DEFAULTS.spend);
+  el.ppl.value   = num('ppl', 1, 8, DEFAULTS.ppl);
+  el.yrs.value   = num('yrs', 1, 10, DEFAULTS.yrs);
+  price          = num('price', 0, 5000, DEFAULTS.price);
+
+  const preset = [...document.querySelectorAll('.seg button')]
+    .find(b => +b.dataset.price === price);
+  if (preset) { setDevice(preset, false); }
+  else { setDevice(document.querySelector('[data-price=custom]'), false); el.cp.value = price; }
+}
+
+/* ------------------------------------------------------------ device seg */
+function setDevice(btn, rerender = true) {
+  document.querySelectorAll('.seg button')
+    .forEach(b => b.setAttribute('aria-pressed', String(b === btn)));
+  customMode = btn.dataset.price === 'custom';
+  el.cpWrap.classList.toggle('on', customMode);
+  price = customMode ? (+el.cp.value || 0) : +btn.dataset.price;
+  if (rerender) render();
+}
+
+/* ------------------------------------------------------------ wiring */
+[el.spend, el.ppl, el.yrs].forEach(n => n.addEventListener('input', () => render()));
+el.cp.addEventListener('input', () => { if (customMode) { price = +el.cp.value || 0; render(); } });
+
+document.querySelectorAll('.seg button')
+  .forEach(b => b.addEventListener('click', () => setDevice(b)));
+
+document.querySelectorAll('.preset').forEach(b => b.addEventListener('click', () => {
+  el.spend.value = b.dataset.spend;
+  render();
+}));
+
+$('reset').addEventListener('click', () => {
+  el.spend.value = DEFAULTS.spend;
+  el.ppl.value   = DEFAULTS.ppl;
+  el.yrs.value   = DEFAULTS.yrs;
+  el.cp.value    = DEFAULTS.price;
+  setDevice(document.querySelector('[data-price="199"]'));
+});
+
+$('share').addEventListener('click', async () => {
+  const label = $('shareTxt'), original = 'Copy shareable link';
+  try {
+    await navigator.clipboard.writeText(location.href);
+    label.textContent = 'Copied ✓';
+  } catch {
+    label.textContent = location.href;   // clipboard blocked → show it to copy manually
+  }
+  setTimeout(() => { label.textContent = original; }, 2000);
+});
+
+/* redraw the SVG on resize so labels stay legible */
+let rid;
+addEventListener('resize', () => { clearTimeout(rid); rid = setTimeout(() => render(false), 120); });
+
+loadUrl();
+render(false);
+</script>
+</body>
+</html>
